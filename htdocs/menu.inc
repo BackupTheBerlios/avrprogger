@@ -8,6 +8,7 @@ The project is hosted by <br>
 
 <ul>
 <li><a href="/index.php">Home</a>
+<li><a href="http://developer.berlios.de/projects/avrprogger/">Project Page</a>
 <li><a href="/links.php">Link Page</a>
 </ul>
 
