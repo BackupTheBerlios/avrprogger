@@ -13,6 +13,7 @@
  <li>Assembler includes
  </ul>
 <li><a href="http://www.tavrasm.org" target="_new">Tom's AVR Assembler</a>
+<li><a href="http://geda.seul.org" target="_new">gEDA</a>
 </ul>
 
 <?include 'footer.inc'?>
