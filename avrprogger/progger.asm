@@ -5,6 +5,9 @@
 ; company:   GNOM SOFT GmbH, Dresden
 ; date:      August 2002
 ;
+; $Id
+; $Changelog$
+;
 ; This software implements the programming protocoll specified in 
 ; Atmels application note avr910.asm dated May 2000.
 ; It is coded for the AT90S4433/2333 and uses hardware UART and SPI. 
@@ -437,19 +440,34 @@ receive:
 		cpi data, 'l'
 		brne command10
 
-		; TODO
-		ldi data, '?'  ;  
+		rcall receiveMore
+		mov memory, data
+		ldi data, 0xAC
+		rcall transfer
+		ldi data, 0xE0
+		rcall transfer
+		rcall transfer
+		mov data, memory
+		rcall transfer
+		ldi data, 13
 		rcall transmit
 		reti
-
 
 	;* | Write fuse bits                   | 'f' |    dd |      | 13d |  11  |
 	command10:
 		cpi data, 'f'
 		brne command11
 
-		; TODO
-		ldi data, '?'  ;  
+		rcall receiveMore
+		mov memory, data
+		ldi data, 0xAC
+		rcall transfer
+		ldi data, 0xA0
+		rcall transfer
+		rcall transfer
+		mov data, memory
+		rcall transfer
+		ldi data, 13
 		rcall transmit
 		reti
 
