@@ -1,0 +1,6 @@
+*.output_*.ps *.output_*.eps
+*.output_*.ps.gz *.output_*.eps.gz
+*.log
+*.pcb.gz
+attribs
+*.net
