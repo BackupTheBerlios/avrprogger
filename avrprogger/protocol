@@ -1,0 +1,116 @@
+This file tries to document the protocol understood by progger.asm.
+
+Assumed is a connection via RS232 between PC and the
+programmer-AVR.
+
+All data is transmitted in binary.
+
+
+Enter programming mode
+'P' -> CR
+pull RESET of target low and put programmer SPI in master mode, set
+next address for programming to 0
+
+Leave programming mode
+'L' -> CR
+set RESET of target high, switch off LED, clear pagemode flag
+
+Report autoncrement address
+'a' -> flag
+report whether programmer uses autoincrementing address, currently
+flag is always 'Y'
+
+Set page mode
+'M' -> CR
+set pagemode flag
+
+Set address
+'A' addr -> CR
+set next address to be programmed
+address is sent in two bytes, MSB first
+
+Write program memory low byte
+'c' byte -> CR
+write byte to target to be programmed as low byte
+
+Write program memory high byte
+'C' byte -> CR
+write byte to target to be programmed as high byte, increment address
+
+Issue page write
+'m' -> CR
+for targets which must be programmed in page mode, starts real write
+into Flash
+
+Read program memory
+'R' -> high low
+reads from program memory, increment address
+
+Write EEPROM
+'D' addr byte -> CR
+write byte to EEPROM, increment address
+address is sent in two bytes, MSB first
+
+Read EEPROM
+'d' addr -> byte
+read byte from EEPROM, increment address
+address is sent in two bytes, MSB first
+
+Erase chip
+'e' -> CR
+erase Flash and EEPROM of target
+
+Write lock bits
+'l' byte -> CR
+(untested)
+
+Write fuse bits
+'f' byte -> CR
+
+Read fuse and lock bits
+'F' -> byte
+(unimplemented)
+
+Select device type
+'T' type -> CR
+set device type of target (decides whether to use page mode or not)
+
+Read signature
+'s' -> type memory manufacturer
+read signature bytes of target
+
+Get supported device codes
+'t' -> codes NUL
+return list of devices which programmer knows about
+
+Get software identifier
+'S' -> id[7]
+
+Get software version
+'V' -> major minor
+
+Get hardware version
+'v' -> major minor
+
+Get programmer type
+'P' -> type
+
+Set LED
+'x' data -> CR
+switch on LED, regardless of data
+
+Clear LED
+'y' data -> CR
+switch off LED, regardless of data
+
+Universal command
+':' byte1 byte2 byte3 -> result CR
+send 4-byte command sequence to ISP, last byte of sequence sent is 0,
+result is the last byte received
+
+New universal command
+'.' byte1 byte2 byte3 byte4 -> result CR
+send 4-byte command sequence to ISP, result is the last byte received
+
+
+$Id: protocol,v 1.1 2002/11/23 23:36:09 hdietze Exp $
