@@ -1,0 +1,193 @@
+
+
+AVR progger fuer Linux und Windows :
+mit Java auf serielle Schnittstelle zugreifen
+-------------------------------------------------
+
+Die benoetigten Dateien befinden sich auf  http://www.gnomsoft.de/RS232-1.0.zip
+
+Am einfachsten ist folgende Vorgehensweise, wenn die .asm Assembler-Dateien 
+im Verzeichnis /home/knoppix/avr stehen:
+
+1) obige ZIP-Datei in das Verzeichnis /home/knoppix/avr kopieren und dort entpacken
+2) den Assembler gavrasm besorgen von http://www.avr-asm-tutorial.net/gavrasm/index_de.html 
+
+An dieser Stelle moechte ich mich bei Gerhard Schmidt fuer den Assembler bedanken, 
+der sowohl unter Windows und Linux funktioniert. 
+
+3) die ausfuehrbare Datei gavrasm bzw. gavrasm.exe nach /home/knoppix/avr kopieren
+4) zB. buttons.asm assemblieren mit ./gavrasm buttons.asm
+5) testen ob Java richtig installiert ist mit :  java HalloWelt
+6) AVR programmieren mit : java AVRprog buttons
+7) AVR schneller programmieren mit : java AVRprog -b wasgrosses
+
+Mit der -b Option wird blockweise uebertragen. Damit lassen sich recht kurze Programmierzeiten 
+erreichen. Das STK500 programmiert noch etwas schneller, da dort mit 115200 Baud gearbeitet 
+wird und einem Datenpuffer von 256 Byte (AVRprog nutzt 19200 Baud und 64 Byte Puffer). Da die 
+Spezifikation des STK500 mittlerweile von Atmel offengelegt wordem ist, kann AVRprog.java 
+und progger.asm auch als Vorlage benutzt werden, ein STK-Pendant zu entwickeln.
+
+Die C-Bibliotheksdateien zum Zugriff auf die serielle Schnittstelle (libRS232.so und RS232.dll) 
+sind fertig kompiliert und werden automatisch in das passende Verzeichnis kopiert, wenn 
+AVRprog.class zum ersten mal ausgefuehrt wird. Ich hatte mich entschlossen, diese C-Bibliotheken 
+selbst zu programmieren, da die "javax.comm.*" Bibliotheken von SUN zu langsam sind (Faktor 10) 
+und mir die verfuegbaren Linux-Bibliotken zu kompliziert zu installieren waren. Auch hatte mich 
+JNI interessiert, mit denen die Moeglichkeiten von Java mit C-Bibliotheken beliebig erweitert 
+werden koennen. Dokumentation dazu steht auf http://java.sun.com/docs/books/jni/   
+
+Um mit Linux die seriellen Schnittstellen zu nutzen muss man entweder root-Rechte haben 
+oder in der Benutzergruppe uucp sein oder sonstwie Zugriffsrechte auf /dev/ttyS? und 
+/var/lock haben.
+
+
+Terminalprogramme:
+------------------
+Wer die C-Bibliotheken benutzen will, um mit eigenen Java-Programmen auf die serielle 
+Schnittstelle zuzugreifen, der kann das unter Linux mit "minicom" machen und unter Windows mit 
+"Hyperterminal". Beide sind jeweils auf Baudrate, Schnittstelle etc. zu konfigurieren.
+
+minicom ist normalerweise bei Linux bereits installiert, hat eine eigene man page und wird am 
+besten gestartet mit Angabe einer vorher gespeicherten Konfigurationsdatei:
+
+	minicom meine.dfl
+
+Hyperterminal ist zu erreichen ueber Menueoptionen Start->Zubehoehr->Hyperterminal->Hyperterminal
+Auch hier kann die Konfiguration gesichert werden und dann laesst sich Hyperterminal 
+auch von der Konsole aus starten mit 
+
+	start Hypertrm meine.ht
+
+
+Zum Selber-Kompilieren :
+------------------------
+
+Unter Linux wird die Client-Software fuer den progger folgendermassen kompiliert, wobei der Pfad 
+zu Java entsprechend anzupassen ist. Das Ergebnis ist dann libRS232.so
+
+gcc -shared -I/usr/local/bin/j2sdk.4.1_01/include -I/usr/local/bin/j2sdk.4.1_01/include/linux  RS232linux.c
+
+Unter Windows ist so zu verfahren (die Verzeichnisse fuer Visual C++ und Java sind wieder anzupassen):
+
+C:\Program Files\Microsoft Visual Studio\VC98\BIN
+
+Damit sind alle Umgebungsvariablen gesetzt und es kann RS232.dll erstellt werden mit :
+
+cl -Ic:\java\include -Ic:\java\include\win32  -LD RS232windows.c -FeRS232.dll
+
+Der Java-Client wird kompiliert wird 
+
+javac AVRprog
+
+Damit werden auch automatisch die RS232*.java Dateien kompiliert.
+
+Die progger-Software wird assembliert mit 
+
+./gavrasm progger.asm
+
+
+Dateiliste der ZIP-Datei:
+---------------------------------------------
+
+    28833  02-16-03 14:14   progger.asm
+     2311  02-16-03 14:17   dbg115.inc
+     4092  02-16-03 14:17   progger.hex
+    45056  01-29-03 00:04   RS232.dll
+     8247  02-01-03 00:21   libRS232.so
+     3337  02-15-03 12:37   RS232.class
+      988  02-01-03 00:16   RS232InputStream.class
+     1078  01-30-03 15:07   RS232OutputStream.class
+     9628  02-15-03 12:31   AVRprog.class
+      896  01-30-03 13:07   HalloWelt.class
+     1811  02-06-03 12:41   RS232Native.h
+     6476  02-16-03 13:16   RS232linux.c
+     4811  02-16-03 13:30   RS232windows.c
+     4042  02-15-03 12:37   RS232.java
+     1597  02-01-03 00:16   RS232InputStream.java
+     1626  01-30-03 14:13   RS232OutputStream.java
+      181  02-15-03 21:08   liesmich.txt
+    21963  02-15-03 12:31   AVRprog.java
+
+Der Vollstaendigkeit hier noch ein kleines Java-Programm, mit dem ich den Zugriff auf die 
+serielle Schnittstelle getestet hatte: Ping.java
+
+import java.io.*;
+import java.util.*;
+
+public class Ping {
+	
+	static	InputStream in = null;
+	static 	OutputStream out = null;
+
+
+	/**
+	 * 
+	 */
+	static public RS232 openRS232(String portName) {
+		RS232 port = RS232.open(portName, 19200, 8, 0);
+		in = port.getInputStream();
+		out = port.getOutputStream();
+		return port;
+	}
+
+
+	static public void main(String[] params) {
+
+		String portName = null;
+		int loops = 10;
+		
+		byte[] 	outBuffer = "ping".getBytes();
+		byte[] inBuffer = new byte[4];
+		long startTime = 0;
+		long endTime = 0;
+		long diff = 0;
+
+		switch (params.length) {
+		case 0 :
+			System.out.println("Ping.java: !!! specify port name ! ") ;
+			return;
+		case 1 :
+			portName = params[0];
+			break ;
+		case 2 :
+			portName = params[0];
+			loops = Integer.parseInt(params[1]);
+			break ;
+		default :
+			System.out.println("Ping.java: wrong parameter count !!!") ;
+			return;
+		}
+
+		RS232 port1 = openRS232(portName);
+		//	RS232 port2 = RS232.open("/dev/ttyS1", 19200, 8, 0);
+		startTime = System.currentTimeMillis();
+		try {
+			for (int i= 0; i < loops; i++) {
+	      out.write(outBuffer);
+System.out.println("Ping.java: outBuffer "+new String(outBuffer)) ;
+	      in.read(inBuffer);
+System.out.println("Ping.java: inBuffer "+new String(inBuffer)) ;
+			}
+		} catch (Exception ex) {
+			System.out.println("Ping.java: ex: "+ex) ;
+		}
+				
+		endTime = System.currentTimeMillis();
+		diff = endTime - startTime ;
+		System.out.println("Ping.java: for "+loops+" loops: "+diff) ;
+		port1.close();
+		
+	}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+

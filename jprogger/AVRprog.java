@@ -10,8 +10,7 @@
 
 //	import org.storedobjects.db.*;
 import java.io.*;
-import gnu.io.*;
-//import javax.comm.*;
+//	import javax.comm.*;
 
 //	COM1 und nicht com1 !
 //  /dev/ttyS0
@@ -24,46 +23,66 @@ public class AVRprog {
 
 	static InputStream in = null;
 	static OutputStream out = null;
-	static byte[] outBuffer = new byte[3];
-	static byte[] inBuffer = new byte[3];
+	static byte[] outBuffer = new byte[4];
+	static byte[] inBuffer = new byte[4];
 	static byte[] fileBytes;
 	static char[] line = new char[1000];
 	static int lineLength;
+	static int baudRate = 19200;
+	static int blockSize = 64;
+
+	static int pageSize = 0;
+	static boolean blockMode = false;
+	static String hexFile = null;
+	static String eepFile = null;
+	static boolean eraseOnly = false;  // TODO   
+	static boolean writeFuses = false; 
+	static boolean readFuses = false; 
+
+	static int spiByte2 = 0;
+	static int spiByte3 = 0;
+	static int spiByte4 = 0;
 
 
 	/**
 	 * 
 	 */
-//	static public void openRS232(String portName) {
-//		RS232 port = RS232.open(portName, 19200, 8, 0);
-//		//	RS232 port = RS232.open(portName);
-////	System.out.println("AVRprog.openRS232() port: "+port) ;
-//		in = port.getInputStream();
-//		out = port.getOutputStream();
-//	}
-//
-
-
-	/**
-	 * 
-	 */
-	static public void sunPort(String portName) {
-		CommPortIdentifier cpi = null;
-		SerialPort port = null;
+	static public void openRS232(String portName) throws Exception {
+		RS232 port = null;
 		try {
-		    cpi = CommPortIdentifier.getPortIdentifier(portName);
-		    port = (SerialPort) cpi.open("AVRprog", 13);
-		    out = port.getOutputStream();
-		    in = port.getInputStream();
-		    port.setSerialPortParams(19200,
-					     SerialPort.DATABITS_8,
-					     SerialPort.STOPBITS_1,
-					     SerialPort.PARITY_NONE);
+			port = RS232.open(portName, baudRate, 8, 0);
 		} catch (Exception ex) {
-		    System.out.println("AVRprog.sunPort() ex: "+ex) ;
+			throw ex;		
 		}
-//	System.out.println("AVRprog.sunPort() port: "+port) ;
+		//	RS232 port = RS232.open(portName);
+//	System.out.println("AVRprog.openRS232() port: "+port) ;
+		in = port.getInputStream();
+		out = port.getOutputStream();
 	}
+
+
+
+//		/**
+//		 * 
+//		 */
+//		static public void sunPort(String portName) throws Exception{
+//			CommPortIdentifier cpi = null;
+//			SerialPort port = null;
+//			try {
+//				cpi = CommPortIdentifier.getPortIdentifier(portName);
+//				port = (SerialPort) cpi.open("AVRprog", 13);
+//	      out = port.getOutputStream();
+//	      in = port.getInputStream();
+//	      port.setSerialPortParams(baudRate,
+//	           SerialPort.DATABITS_8,
+//	           SerialPort.STOPBITS_1,
+//	           SerialPort.PARITY_NONE);
+//			} catch (Exception ex) {
+//				//	System.out.println("AVRprog.sunPort() ex: "+ex) ;
+//				throw ex;
+//			}
+//	//	System.out.println("AVRprog.sunPort() port: "+port) ;
+//		}
 
 	
 
@@ -74,11 +93,15 @@ public class AVRprog {
 		inBuffer[0] = 0;
 		inBuffer[0] = 13;  // TODO   
 		try {
-	 	   out.write(outBuffer, 0, outCount);
-		   for (int i = 0; i < inCount;) {
-		       int nread = in.read(inBuffer, i, inCount-i);
-		       i += nread;
-		   }
+			out.write(outBuffer, 0, outCount);
+			if (inCount > 0) {
+		 		//	in.read(inBuffer, 0, inCount);  //	seems not to work on LINUX
+			   for (int i = 0; i < inCount;) {
+			       int nread = in.read(inBuffer, i, inCount-i);
+			       i += nread;
+			   }
+			}
+
 		} catch (Exception ex) {
 			System.out.println("AVRprog.transfer() ex: "+ex) ;
 		}
@@ -92,7 +115,14 @@ public class AVRprog {
 	 */
 	static public void cleanup(boolean OK) {
 		if (! OK) {
-			System.out.println("AVRprog.cleanup()  !!! error with "+(char) outBuffer[0]) ;
+			char outChar = (char) outBuffer[0];
+			char  inChar = (char) inBuffer[0];
+			int inInt = (int) inBuffer[0];
+			if (inInt<0 ) {
+				inInt += 256;
+			}
+			System.out.println("AVRprog.cleanup()  !!! error with "+
+			outChar+" --> "+ inChar+ "["+inInt+"]");
 		}
 
 		//	clear LED   
@@ -100,7 +130,7 @@ public class AVRprog {
 		outBuffer[1] = 0;  // TODO  ? 
 		transfer(2,1);
 		if (inBuffer[0] != 13) {
-		      	System.out.println("AVRprog.  !!! error at  "+(char) outBuffer[0]) ;
+			//	System.out.println("AVRprog.  !!! error at  "+(char) outBuffer[0]) ;
 			//	return;
 		}
 
@@ -108,9 +138,12 @@ public class AVRprog {
 		outBuffer[0] = (byte) 'L';
 		transfer(1,1);
 		if (inBuffer[0] != 13) {
-		    System.out.println("AVRprog.  !!! error at  "+(char) outBuffer[0]) ;
-		    //	return;
+			//	System.out.println("AVRprog.  !!! error at  "+(char) outBuffer[0]) ;
+			//	return;
 		}
+
+		System.out.println(" OK ") ;
+
 	}
 
 
@@ -123,10 +156,21 @@ public class AVRprog {
 		System.out.println("java AVRprog -p128  buttons") ;
 		System.out.println("   -> program memory is organized in pages with 128 bytes each") ;
 		System.out.println("java AVRprog -cCOM2  buttons") ;
-		System.out.println("   -> use serial port COM2 (standard is COM1)") ;
+		System.out.println("   -> use serial port COM2 (standard is /dev/ttyS0)") ;
 		System.out.println("java AVRprog -b  buttons") ;
-		System.out.println("   -> transfer in block mode (much faster)");
+		System.out.println("   -> transfer in block mode (64 bytes blocks and thus much faster)");
+		System.out.println("java AVRprog -p128 -b buttons") ;
+		System.out.println("   -> fastest transfer for ATMEGA163");
+		System.out.println("java AVRprog -f000000") ;
+		System.out.println("   -> write fuse bits: ");
+		System.out.println("   -> specify in hex byte2, byte3 and byte4 for SPI transfer)");
+		System.out.println("      (eg. for MEGA163 this is explained on page 150 of the datasheet)");
+		System.out.println("java AVRprog -q") ;
+		System.out.println("   -> read low fuse bits: ");
 	}	
+
+
+
 
 
 	/**
@@ -150,38 +194,16 @@ public class AVRprog {
 		long startTime = 0;
 		long endTime = 0;
 		long diffTime = 0;
-		
-		String commPort = "/dev/ttyS2";
-		String hexFile = "buttons.hex";
-		String eepFile = "buttons.eep";
-		char ch = 0;
-		int linePos = 0;
-		String lineString = null;
-		
-		int count = 0;
-		int address = 0;		
-		int type = 0;
-		int high = 0;
-		int low = 0;
-		int pos = 0;
-		int pageSize = 0;
-		int pageAddress = 0;
-		int byteAddress = 0;
-		boolean blockMode = false;
 
-		int fileLength = 0;
+		boolean doVerify = false;
 
-		int byteCount = 0;
-		int wordCount = 0;
-		int totalBytes = 0;
-		int totalWords = 0;
-		int percent = 0;
-		int border = 10;
-
-
-//			int test = 1;
-//			test = test << 4;
-//	System.out.println("AVRprog.java: test "+test) ;
+		//	String commPort = "COM1";
+		String commPort = "/dev/ttyS0"; 
+		hexFile = "buttons.hex";
+		eepFile = "buttons.eep";
+		pageSize = 0;
+		blockMode = false;
+		eraseOnly = false;
 
 		int nParams = params.length;
 		String param = null;
@@ -202,11 +224,30 @@ public class AVRprog {
 				return;
 			} else if (param.startsWith("-c")) {  // comm port
 				commPort = param.substring(2);
+			} else if (param.startsWith("-b")) {  // block mode
+				blockMode = true;
+				outBuffer = new byte[4 + blockSize];
+				inBuffer = new byte[4 + blockSize];
+			//	} else if (param.startsWith("-f")) {  // fast mode
+			//		baudRate = 38400;
+			} else if (param.startsWith("-v")) {  // verify
+				doVerify = true;
+			} else if (param.startsWith("-e")) {  // erase
+				eraseOnly = true;
+			} else if (param.startsWith("-f")) {  // write fuse bits
+				writeFuses = true;
+				spiByte2 = hex2int(param.charAt(2)) * 16 + hex2int(param.charAt(3));
+				spiByte3 = hex2int(param.charAt(4)) * 16 + hex2int(param.charAt(5));
+				spiByte4 = hex2int(param.charAt(6)) * 16 + hex2int(param.charAt(7));
+			} else if (param.startsWith("-q")) {  // read fuse bits
+				readFuses = true;
+				//	spiByte2 = hex2int(param.charAt(2)) * 16 + hex2int(param.charAt(3));
+				//	spiByte3 = hex2int(param.charAt(4)) * 16 + hex2int(param.charAt(5));
+				//	spiByte4 = hex2int(param.charAt(6)) * 16 + hex2int(param.charAt(7));
 			} else {
 				hexFile = param + ".hex";
 				eepFile = param + ".hex";
 			}
-			
 		}
 
 //	System.out.println("AVRprog.java: pageSize: "+pageSize) ;
@@ -217,80 +258,191 @@ public class AVRprog {
 
 		File file = new File(hexFile);
 		if ( ! file.exists()) {
+			//	hexFile = hexFile.toUpperCase();
+			//	file = new File(hexFile);
+			//	if ( ! file.exists()) {
+			//		System.out.println("AVRprog.main() file does not exist: "+hexFile) ;
+			//		return;
+			//	}
 			System.out.println("AVRprog.main() file does not exist: "+hexFile) ;
 			return;
 		}
 		
-		System.out.println ("port: "+commPort);
-		sunPort(commPort);
-		//openRS232(commPort);
-//	System.out.println("AVRprog.java: RS232 !!! ") ;
+
+		try {
+			openRS232(commPort);     // try this lib first 
+		} catch (Exception ex) {
+			System.out.println("AVRprog.main() ex: "+ex) ;
+			
+			//	try {
+			//		//	sunPort(commPort);       // if not found try Sun's implementation
+			//	} catch (Exception ex1) {
+			//		System.out.println("AVRprog.main() ") ;
+			//		System.out.println("either problem with RS232 lib ") ;
+			//		System.out.println("or try  -c parameter, for instance -cCOM1 ") ;
+			//		return;
+			//	}
+		}
+
+		//	//	sunPort(commPort);
+		//	openRS232(commPort);
 
 		startTime = System.currentTimeMillis();
 
+		boolean OK = action(doVerify);
+
+		cleanup(OK);
+
+		//	OK = false;
+		if (! OK) {
+			return;
+		}
+
+		if (doVerify || writeFuses || readFuses) {
+			//
+		} else {
+			doVerify = true;
+			OK = action(doVerify);
+			cleanup(OK);
+		}
+		
+		if (OK) {
+			endTime = System.currentTimeMillis();
+			diffTime = endTime - startTime ;
+			System.out.println("AVRprog.main() fertig (millis:  "+diffTime+")") ;
+		}
+
+	}
+
+
+	/**
+	 * 
+	 */
+	static public boolean action(boolean doVerify) {
+
+	
+		char ch = 0;
+		int linePos = 0;
+		String lineString = null;
+		
+		int count = 0;
+		int address = 0;		
+		int type = 0;
+		int high = 0;
+		int low = 0;
+		int pos = 0;
+		int pageAddress = 0;
+		int byteAddress = 0;
+
+		int fileLength = 0;
+
+		int byteCount = 0;
+		int wordCount = 0;
+		int totalBytes = 0;
+		int totalWords = 0;
+		int percent = 0;
+		int border = 10;
+
+		int iBlock = 4;
+		int checkHigh = 0;
+		int checkLow = 0;
+		int trial = 0;		
+		int offset = 0;
+
+		outBuffer[0] = 27;   // TODO  wake up call 
+		transfer(1,0);
+
+
 		// enter programming mode:	
-//	System.out.println("AVRprog.java: P ") ;
 		outBuffer[0] = (byte) 'P';
 		transfer(1,1);
 		if (inBuffer[0] != 13) {
-			cleanup(false);
-			return;
+			return false;
 		}
+//	System.out.println("AVRprog.java: P ") ;
 
-		//	set LED  // TODO   
-//	System.out.println("AVRprog.java: x ") ;
-		outBuffer[0] = (byte) 'x';
-		outBuffer[1] = 0;  // TODO  ? 
-		transfer(2,1);
-		if (inBuffer[0] != 13) {
-			cleanup(false);
-			return;
+//			//	set LED  // TODO   
+//	//	System.out.println("AVRprog.java: x ") ;
+//			outBuffer[0] = (byte) 'x';
+//			outBuffer[1] = 11;  // TODO  ? 
+//			transfer(2,1);
+//			if (inBuffer[0] != 13) {
+//				cleanup(false);
+//				return;
+//			}
+
+		if (writeFuses) {
+			outBuffer[0] = (byte) 'f';
+			outBuffer[1] = (byte) spiByte2;
+			outBuffer[2] = (byte) spiByte3;
+			outBuffer[3] = (byte) spiByte4;
+			transfer(4,1);
+			if (inBuffer[0] != 13) {
+				return false;
+			}
+			return true;			
+		} else  if (readFuses) {
+			outBuffer[0] = (byte) 'q';
+			//	outBuffer[1] = (byte) spiByte2;
+			//	outBuffer[2] = (byte) spiByte3;
+			//	outBuffer[3] = (byte) spiByte4;
+			//	transfer(4,1);
+			transfer(1,1);
+			String fuses = byte2hex(inBuffer[0]);
+			System.out.println("AVRprog.action() fuse bits: "+fuses) ;
+			return true;			
+		} else {
+			//	
 		}
+				
+		if (!doVerify) {
+			// read signature bytes:	
+			outBuffer[0] = (byte) 's';
+			transfer(1,3);
+			//	chip erase
+			outBuffer[0] = (byte) 'e';
+			transfer(1,1);
+			if (inBuffer[0] != 13) {
+				return false;
+			}
+//	System.out.println("AVRprog.java: e ") ;
 
+			if (eraseOnly) {
+				return true;
+			}
 
-		// read signature bytes:	
-//	System.out.println("AVRprog.java: s ") ;
-		outBuffer[0] = (byte) 's';
-		transfer(1,3);
-
-	System.out.println("AVRprog.java: signature 1: "+inBuffer[0]) ;
-	System.out.println("AVRprog.java: signature 2: "+inBuffer[1]) ;
-	System.out.println("AVRprog.java: signature 3: "+inBuffer[2]) ;
-
-//	cleanup(true);
-//	if (true) {
-//		return;
-//	}
-
+//				//	leave programming mode
+//	System.out.println("AVRprog.java: l ") ;
+//				outBuffer[0] = (byte) 'L';
+//				transfer(1,1);
+//				if (inBuffer[0] != 13) {
+//					return false;
+//				}
+//	System.out.println("AVRprog.java: P ") ;
+//				outBuffer[0] = (byte) 'P';
+//				transfer(1,1);
+//				if (inBuffer[0] != 13) {
+//					return false;
+//				}
+		}
+		
 
 		if (pageSize > 0) {
 			//	set page mode
-System.out.println("AVRprog.java: M ") ;
+//	System.out.println("AVRprog.java: M  pageSize:  "+pageSize) ;
 			outBuffer[0] = (byte) 'M';
 			transfer(1,1);
 			if (inBuffer[0] != 13) {
-				cleanup(false);
-				return;
+				return false;
 			}
 		}
-
 
 		//	report autoincrement address
 //	System.out.println("AVRprog.java: a ") ;
 		outBuffer[0] = (byte) 'a';
 		transfer(1,1);
 		if (inBuffer[0] != (byte) 'Y') {
-			cleanup(false);
-			return;
-		}
-
-		//	chip erase
-//	System.out.println("AVRprog.java: e ") ;
-		outBuffer[0] = (byte) 'e';
-		transfer(1,1);
-		if (inBuffer[0] != 13) {
-			cleanup(false);
-			return;
+			return false;
 		}
 
 		//	set address
@@ -300,8 +452,7 @@ System.out.println("AVRprog.java: M ") ;
 		outBuffer[2] = 0;
 		transfer(3,1);
 		if (inBuffer[0] != 13) {
-			cleanup(false);
-			return;
+			return false;
 		}
 
 //			//	read program memory
@@ -325,8 +476,12 @@ System.out.println("AVRprog.java: M ") ;
 //			low = inBuffer[0];
 //	
 
-		System.out.print("AVRprog.main() bin am programmieren .") ;
-
+		if (doVerify) {
+			System.out.print("AVRprog.action() bin am verifizieren  .") ;
+		} else {
+			System.out.print("AVRprog.action() bin am programmieren .") ;
+		}
+		
 		fileBytes = readFile(hexFile);
 		fileLength = fileBytes.length;
 
@@ -350,6 +505,31 @@ System.out.println("AVRprog.java: M ") ;
 			}
 		}
 		totalWords = byteCount / 2;
+
+		if (doVerify && blockMode) {
+			
+			if (inBuffer.length < byteCount) {
+				inBuffer = new byte[byteCount];
+			}
+
+			//	set address
+			outBuffer[0] = (byte) 'A';
+			outBuffer[1] = (byte) 0;
+			outBuffer[2] = (byte) 0;
+			transfer(3,1);
+			if (inBuffer[0] != 13) {
+				return false;
+			}
+			
+			outBuffer[0] = (byte) 'g';
+			outBuffer[1] = (byte) (totalWords  >> 8);
+			outBuffer[2] = (byte) (totalWords  >> 0);
+			outBuffer[3] = (byte) 'F';
+
+			transfer(4, byteCount);
+
+		}
+		
 		byteCount = 0;
 
 		linePos = 0;	
@@ -364,7 +544,7 @@ System.out.println("AVRprog.java: M ") ;
 					}
 				}
 				
-//					lineString = new String(line, 0, linePos);
+//	lineString = new String(line, 0, linePos);
 //	System.out.println("AVRprog.java: lineString "+lineString) ;
 
 				count = hex2int(line[1]) * 16 + hex2int(line[2]);
@@ -387,67 +567,148 @@ System.out.println("AVRprog.java: M ") ;
 					for (int k= 0; k < count; k++) {
 						low = hex2int(line[pos]) * 16 + hex2int(line[pos+1]);
 						high = hex2int(line[pos+2]) * 16 + hex2int(line[pos+3]);
+
 //	System.out.println("AVRprog.java: high/low: "+high+"/"+low) ;
+//	System.out.println("AVRprog.java: pos "+pos) ;
 
-//	System.out.println("AVRprog.java: low:  "+new String(line, pos, 2)) ;
-						//	write program memory: low byte  (!!! must be first write)
-						outBuffer[0] = (byte) 'c';
-						outBuffer[1] = (byte) low;
-						transfer(2,1);
-						if (inBuffer[0] != 13) {
-							cleanup(false);
-							return;
-						}
-//	System.out.println("AVRprog.java: high: "+new String(line, pos+2, 2)) ;
-						//	write program memory: high byte
-						outBuffer[0] = (byte) 'C';
-						outBuffer[1] = (byte) high;
-						transfer(2,1);
-						if (inBuffer[0] != 13) {
-							cleanup(false);
-							return;
-						}
 						pos += 4;
-
 						byteCount += 2;
-						if (pageSize > 0 && byteCount == pageSize) {
 
-//	System.out.println("AVRprog.java: write page at address: "+pageAddress) ;
+						if (doVerify) {
 
-							high = (pageAddress >> 8) & 0xFF;
-							low  = (pageAddress >> 0) & 0xFF;
+							if (blockMode) {
+								checkLow  = inBuffer[offset++];
+								if (checkLow < 0) {
+									checkLow += 256;
+								}
+								checkHigh = inBuffer[offset++];
+								if (checkHigh < 0) {
+									checkHigh += 256;
+								}
 
-							//	set address for next page write
-							outBuffer[0] = (byte) 'A';
-							outBuffer[1] = (byte) high;
-							outBuffer[2] = (byte) low;
-							transfer(3,1);
-							if (inBuffer[0] != 13) {
-								cleanup(false);
-								return;
+								if (low != checkLow) {
+									System.out.println("Keine Uebereinstimmung  :-(   offset: "+(offset-1)) ;
+//	System.out.println("AVRprog.java:  "+byte2hex(low)+" <> "+byte2hex(checkLow)) ;
+									return true;
+								}
+
+								if (high != checkHigh) {
+									System.out.println("Keine Uebereinstimmung  :-(  ") ;
+//	System.out.println("AVRprog.java:  "+byte2hex(high)+" <> "+byte2hex(checkHigh)) ;
+									return true;
+								}
+
+							} else {
+
+								outBuffer[0] = (byte) 'R';
+								transfer(1,2);
+								checkHigh = inBuffer[0];
+								if (checkHigh < 0) {
+									checkHigh += 256;
+								}
+								checkLow  = inBuffer[1];
+								if (checkLow < 0) {
+									checkLow += 256;
+								}
+	
+								if (checkHigh != high || checkLow != low) {
+									System.out.println() ;
+									System.out.println("AVRprog.java: error at: "+word2hex(wordCount)) ;
+									System.out.println("expected: high: "+byte2hex(high)+"  low: "+byte2hex(low)) ;
+									System.out.println("received: high: "+byte2hex(checkHigh)+"  low: "+byte2hex(checkLow)) ;
+									return true;
+								}
+								
+							}
+							
+						} else {  //  program, not verify
+
+							if (blockMode) {
+
+								outBuffer[iBlock++] = (byte) low;
+								outBuffer[iBlock++] = (byte) high;
+
+								if (iBlock - 4 == blockSize) {
+//	System.out.println("AVRprog.java: iBlock: "+iBlock+"   iBlock-4   "+(iBlock-4)+"  byteCount: "+byteCount) ;
+									outBuffer[0] = (byte) 'B';
+									outBuffer[1] = 0;  // would be high byte in 16-bit block sizes
+									outBuffer[2] = (byte) blockSize;
+									outBuffer[3] = (byte) 'F';  // means F:Flash  E:EEprom
+	
+//	System.out.println("AVRprog.java: write Block of "+blockSize) ;
+									transfer(blockSize + 4, 1);
+	//	System.out.println("AVRprog.java: done !!! ") ;
+									if (inBuffer[0] != 13) {
+										return false;
+									}
+									iBlock = 4;
+								}
+	
+//	System.out.println("AVRprog.java: adress/H/L  "+address+"/"+high+"/"+low) ;
+								
+							} else {
+
+								//	write program memory: low byte  (!!! must be written first)
+								outBuffer[0] = (byte) 'c';
+								outBuffer[1] = (byte) low;
+								transfer(2,1);
+								if (inBuffer[0] != 13) {
+									return false;
+								}
+	
+								//	write program memory: high byte
+								outBuffer[0] = (byte) 'C';
+								outBuffer[1] = (byte) high;
+								transfer(2,1);
+								if (inBuffer[0] != 13) {
+									return false;
+								}
+								
 							}
 
-							//	issue page write
-							outBuffer[0] = (byte) 'm';
-							transfer(1,1);
-							if (inBuffer[0] != 13) {
-								cleanup(false);
-								return;
+							if (pageSize > 0 && (byteCount == pageSize)) {
+	
+//	System.out.println("AVRprog.java: write page at address: "+pageAddress+" at byteCount: "+byteCount) ;
+	
+								high = (pageAddress >> 8) & 0xFF;
+								low  = (pageAddress >> 0) & 0xFF;
+	
+								//	set address for next page write
+								outBuffer[0] = (byte) 'A';
+								outBuffer[1] = (byte) high;
+								outBuffer[2] = (byte) low;
+								transfer(3,1);
+								if (inBuffer[0] != 13) {
+									return false;
+								}
+	
+								//	issue page write
+								outBuffer[0] = (byte) 'm';
+								transfer(1,1);
+								if (inBuffer[0] != 13) {
+									return false;
+								}
+	
+								//	set address for next page load (byte write)
+								outBuffer[0] = (byte) 'A';
+								outBuffer[1] = 0;
+								outBuffer[2] = 0;
+								transfer(3,1);
+								if (inBuffer[0] != 13) {
+									return false;
+								}
+	
+								pageAddress += (pageSize / 2); 
+								byteCount = 0;	
 							}
 
-							//	set address for next page load (byte write)
-							outBuffer[0] = (byte) 'A';
-							outBuffer[1] = 0;
-							outBuffer[2] = 0;
-							transfer(3,1);
-							if (inBuffer[0] != 13) {
-								cleanup(false);
-								return;
-							}
-
-							pageAddress += (pageSize / 2); 
-							byteCount = 0;	
+							
 						}
+						
+
+
+
+//	System.out.println("AVRprog.java: wordCount: "+wordCount) ;
 
 						wordCount++;
 						percent = (int) (((double)wordCount / totalWords) * 100);
@@ -473,10 +734,29 @@ System.out.println("AVRprog.java: M ") ;
 
 		}
 
-		System.out.println() ;
+		if (doVerify) {
+			return true;
+		}
+
+		if (blockMode && iBlock > 4) {
+			blockSize = iBlock - 4;
+			if (blockSize > 0) {
+				outBuffer[0] = (byte)'B';
+				outBuffer[1] = 0;  ; // would be high byte in 16-bit block sizes
+				outBuffer[2] = (byte) blockSize;
+				outBuffer[3] = (byte) 'F';  // means F:Flash  E:EEprom
+//	System.out.println("AVRprog.java: last block:  "+blockSize) ;
+				transfer(blockSize + 4, 1);
+//	System.out.println("AVRprog.java: last block done ! ") ;
+				if (inBuffer[0] != 13) {
+					return false;
+				}
+				iBlock = 4;
+			}
+		}
 
 		if (pageSize > 0) {
-			System.out.println("AVRprog.java: last write page at address: "+pageAddress) ;
+//	System.out.println("AVRprog.java: last page at address: "+pageAddress+" at byteCount: "+byteCount) ;
 
 			high = (pageAddress >> 8) & 0xFF;
 			low  = (pageAddress >> 0) & 0xFF;
@@ -487,26 +767,18 @@ System.out.println("AVRprog.java: M ") ;
 			outBuffer[2] = (byte) low;
 			transfer(3,1);
 			if (inBuffer[0] != 13) {
-				cleanup(false);
-				return;
+				return false;
 			}
 
 			//	issue page write
 			outBuffer[0] = (byte) 'm';
 			transfer(1,1);
 			if (inBuffer[0] != 13) {
-				cleanup(false);
-				return;
+				return false;
 			}
 		}
 		
-		cleanup(true);
-
-		endTime = System.currentTimeMillis();
-		diffTime = endTime - startTime ;
-
-		System.out.println("AVRprog.main() fertig (millis:  "+diffTime+")") ;
-		System.exit (0);
+		return true;
 	}
 
 
@@ -593,6 +865,57 @@ System.out.println("AVRprog.java: M ") ;
 	} 
 
 
+	/**
+	 * 
+	 */
+	static public String word2hex(int b) {
+		int upper = b / 256;
+		int lower = b % 256;
+		return ""+byte2hex(upper)+byte2hex(lower);		
+	}
+
+
+	/**
+	 * 
+	 */
+	static public String byte2hex(int b) {
+		if (b < 0) {
+			b += 256;
+		}
+		
+		int upper = b / 16;
+		int lower = b % 16;
+		return ""+nibble2hex(upper)+nibble2hex(lower);		
+	}
+
+
+	/**
+	 * 
+	 */
+	static public char nibble2hex(int n) {
+		switch (n) {
+		case  0: return  '0';
+		case  1: return  '1';
+		case  2: return  '2';
+		case  3: return  '3';
+		case  4: return  '4';
+		case  5: return  '5';
+		case  6: return  '6';
+		case  7: return  '7';
+		case  8: return  '8';
+		case  9: return  '9';
+		case  10: return  'A';
+		case  11: return  'B';
+		case  12: return  'C';
+		case  13: return  'D';
+		case  14: return  'E';
+		case  15: return  'F';
+		default :
+			System.out.println("AVRprog.nibble2hex() wrong input: "+n) ;
+			return '?';
+		}
+	}
+
 }
 
 
@@ -600,4 +923,4 @@ System.out.println("AVRprog.java: M ") ;
 
 
 
-// setup:  cursor:322,20; frame:100,50,900,600; bookmarks:385,29,107,0,0,0,0,0;
+// setup:  cursor:350,0; frame:32,102,976,600; bookmarks:227,0,127,0,0,0,0,0;
