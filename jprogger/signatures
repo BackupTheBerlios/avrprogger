@@ -1,0 +1,8 @@
+# signatures and programming properties of different AVR uCs
+
+#key: signature in hex
+#manufacturer
+#name
+#pagesize (in Bytes)
+
+1E9402  Atmel ATmega163 128
