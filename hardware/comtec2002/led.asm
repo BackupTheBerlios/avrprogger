@@ -33,20 +33,22 @@
 	reti 			; EEPROM ready
 	reti			; Analog comparator
 
-	;; PD7 - Segment a
-	;; PD6 -         b
-	;; PD5 -         c
-	;; PD4 -         d
-	;; PD3 -         e
-	;; PD2 -         f
-	;; PB1 -         g
-	;; PB0 -         .
+	;; PD7 - Segment a f
+	;; PD6 -         b e
+	;; PD5 -         c d
+	;; PD4 -         d c
+	;; PD3 -         e b
+	;; PD2 -         f a
+	;; PB1 -         g g
+	;; PB0 -         . .
+	;; WARNING! this is not the official naming
+	;; of the segments
 	;;
 	;; PC2 - Digit 0
 	;; PC3 -       1
 	;; PC4 -       2
 	;; PC5 -       3
-
+	
 	.equ DIGSTART = 0x60
 	.equ DIGEND  = 0x63
 	.equ ram_hextab = 0x70
