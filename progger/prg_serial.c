@@ -123,6 +123,20 @@ prg_serial_open (const char *port, int speed)
 }
 
 int cur_addr = -1;
+int last_page = -1;
+int use_autoincr = -1;
+char signature[3];
+int avr_index = -1;
+
+int pagesize_flash = -1;
+int pagesize_eeprom = -1;
+
+void
+parse_signature (char * sig)
+{
+  avr_index = find_signature (sig);
+  get_pagesizes (avr_index, &pagesize_flash, &pagesize_eeprom);
+}
 
 static int
 prg_serial_put (int fd, const char * str, const char * expect)
@@ -134,11 +148,10 @@ prg_serial_put (int fd, const char * str, const char * expect)
     int rd;
     int cmp;
     if (expect == NULL || expect[0] == '\0') return wr;
-    buf = malloc (strlen(expect)+1);
+    buf = alloca (strlen(expect)+1);
     rd = read (fd, buf, strlen(expect));
     buf[rd] = '\0';
     cmp = strcmp (buf, expect);
-    free (buf);
     return cmp ? -1 : wr;
   } else return -1;
 }
@@ -146,15 +159,60 @@ prg_serial_put (int fd, const char * str, const char * expect)
 void
 prg_serial_start (int fd)
 {
-  prg_serial_put (fd, "P", "\n");
+  char autoincr;
+  prg_serial_put (fd, "P", "\r");
+  cur_addr = 0;
+  prg_serial_put (fd, "a", NULL);
+  read (fd, &autoincr, 1);
+  use_autoincr = autoincr == 'Y' ? 1 : 0;
+  prg_serial_put (fd, "s", NULL);
+  read (fd, signature, 3);
+  parse_signature (signature);
 }
 
 void
 prg_serial_end (int fd)
 {
+  prg_serial_put (fd, "L", "\r");
 }
 
 void
-prg_serial_write (int fd, const char * buf, int len)
+prg_serial_page_write (int fd)
 {
+  prg_serial_put (fd, "m", "\r");
+  last_page = cur_addr;
+}
+
+void
+prg_serial_write (int fd, int addr, const char * buf, int len)
+{
+  char tmp [256];
+  int i;
+
+  if (addr != cur_addr) {
+    if (pagesize_flash > 0 && last_page >= 0)
+      prg_serial_page_write (fd);
+    tmp[0] = 'A';
+    tmp[1] = (addr >> 8) & 0xff;
+    tmp[2] = (addr & 0xff);
+    tmp[3] = '\0';
+    prg_serial_put (fd, tmp, "\r");
+    cur_addr = addr;
+  }
+
+  for (i=0; i < len; i+=2) {
+    char lo = buf[i], hi = buf[i+1];
+    tmp[0] = 'c';
+    tmp[1] = lo;
+    tmp[2] = '\0';
+    prg_serial_put (fd, tmp, "\r");
+    tmp[0] = 'C';
+    tmp[1] = hi;
+    tmp[2] = '\0';
+    prg_serial_put (fd, tmp, "\r");
+    cur_addr += 2;
+    if (pagesize_flash > 0 && last_page >= 0
+	&& cur_addr >= last_page + pagesize_flash)
+      prg_serial_page_write (fd);
+  }
 }
