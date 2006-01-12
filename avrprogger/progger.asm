@@ -5,7 +5,7 @@
 ; company:   GNOM SOFT GmbH, Dresden
 ; date:      August 2002
 ;
-; $Id
+; $Id: progger.asm,v 1.3 2006/01/12 23:14:23 hdietze Exp $
 ; $Changelog$
 ;
 ; This software implements the programming protocoll specified in 
